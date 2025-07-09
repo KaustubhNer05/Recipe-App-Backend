@@ -4,10 +4,11 @@ const express = require("express");
 const cors = require("cors");
 const { MongoClient, ObjectId } = require("mongodb");
 const cloudinary = require("cloudinary").v2;
+const multer = require("multer");
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json());
 
 const MONGODB_URI = process.env.MONGODB_URI;
 const DB_NAME = "recipe_app_db";
@@ -17,6 +18,9 @@ cloudinary.config({
 	api_key: process.env.CLOUDINARY_API_KEY,
 	api_secret: process.env.CLOUDINARY_API_SECRET
 });
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
 
 app.post('/api/recipes', async (req, res) => {
 	let client;
@@ -175,17 +179,18 @@ app.delete('/api/recipes/:id', async (req, res) => {
 	}
 });
 
-app.post('/api/upload-image', async (req, res) => {
+app.post('/api/upload-image', upload.single('image'), async (req, res) => {
 	try {
-		const { imageBase64 } = req.body;
-
-		if (!imageBase64) {
-			return res.status(400).send({ message: 'No image data provided' });
+		if (!req.file) {
+			return res.status(400).send({ message: 'No image file provided' });
 		}
 
-		const uploadResult = await cloudinary.uploader.upload(imageBase64, {
-			folder: 'recipe_images',
-		});
+		const uploadResult = await cloudinary.uploader.upload(
+			`data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`,
+			{
+				folder: 'recipe_images',
+			}
+		);
 
 		res.status(200).send({ imageUrl: uploadResult.secure_url, publicId: uploadResult.public_id });
 	} catch (error) {
